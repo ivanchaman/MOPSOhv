@@ -1,0 +1,1290 @@
+/*************************************************************************
+ * This is an implementation of MOPSO-CD,a multiobjective particle swarm *
+ *          optimization algorithm using crowding distance               *
+ *                                                                       *
+ * For details please see:                                               *
+ * C.R. Raquel and P.C. Naval, Jr., An Effective Use of Crowding         *
+ *    Distance in Multiobjective Particle Swarm Optimization.            *
+ *    In Proc. of Genetic and Evolutionary Computation Conference        *
+ *    (GECCO 2005), Washington DC, June 2005.                            *
+ *                                                                       *
+ * E-mail address       : cvmig@engg.upd.edu.ph                          *
+ * Version              : mopsocd05b              		         *
+ * Last updated         : Fri Feb 17, 2006       		         *
+ *                                                                       *
+ * Random Generator Source code has been taken from Random Library found *
+ * at http://www.swin.edu.au/astronomy/pbourke/software/random/          *
+ *                                                                       *
+ * Permission to use MOPSO-CD codes is hereby granted for academic and   *
+ * research purposes only. Commercial usage of these codes is prohibited *
+ * without prior knowledge of the authors.  In no way will the authors   *
+ * be held responsible for any possible faulty operation of              *
+ * software/hardware arising from the use of these codes.                *
+ *************************************************************************/
+/*************************************************
+   FUNCTION CODE OPTIMIZATION OBJECTIVE VARIABLES
+   Kita     100  maximize (1)     2         2
+   Kursawe  200  minimize (0)     2         3
+   Deb      300  minimize (0)     2         2
+   DTLZ6    500  minimize (0)     3         22
+       <- put yours here and in test-fun.h
+       /// Initialize your function in initialize_pop()
+       /// Put your function in evaluate()
+       /// Put your constraints, if any, in check_constraints(...)
+       /// See also maintain_particles() routine
+/**************************************************/
+
+//#define function     600   /* set functions code                          */
+#define popsize      100   /* set number of particles in the population   */
+//#define maxgen       3000   /* set maximum number of generations           */
+//#define optimization  0	   /* set optimization type, 0 for min, 1 for max */
+#define archive_size 100   /* set capacity of archive                     */
+//#define maxfun        2    /* set maximum number of objective functions   */
+//#define maxvar        30    /* set maximum number of variables             */
+#define verbose       1    /* verbosity level 0,1 */
+#define printevery   10    /* how frequently should output be generated */
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
+#include <time.h>
+#include "randomlib.h"
+
+double  PI;
+
+void initialize_rand(void);
+void initialize_pop(void);
+void initialize_vel(void);
+void evaluate(void);
+double kita_f1(unsigned int);
+double kita_f2(unsigned int);
+double kursawe_f1(unsigned int);
+double kursawe_f2(unsigned int);
+double deb_f1(unsigned int);
+double deb_f2(unsigned int);
+void store_pbests(void);
+void insert_nondom(void);
+void delete_particle(unsigned int);
+unsigned int compare_particles(unsigned int, unsigned int);
+unsigned int check_constraints(double *);
+void crowding(void);
+void qsortFitness(unsigned int, unsigned int, unsigned int);
+void qsortCrowd(unsigned int, unsigned int);
+void compute_distance(unsigned int);
+void mutate(unsigned int);
+void get_ranges(double *, double *);
+void maintain_particles(void);
+void compute_velocity(void);
+void update_archive(void);
+unsigned int check_nondom(unsigned int);
+void update_pbests(void);
+void save_results(char *);
+void initialize_data(unsigned int,unsigned int);
+void initialize_memory(void);
+void free_memory(void);
+
+double DTLZ6_f1(unsigned int);
+double DTLZ6_f2(unsigned int);
+double DTLZ6_f3(unsigned int);
+
+void ZDT1(unsigned int);
+void ZDT2(unsigned int);
+void ZDT3(unsigned int);
+void ZDT4(unsigned int);
+void ZDT6(unsigned int);
+
+void DTLZ1(unsigned int);
+void DTLZ2(unsigned int);
+void DTLZ3(unsigned int);
+void DTLZ4(unsigned int);
+void DTLZ5(unsigned int);
+void DTLZ6(unsigned int);
+void DTLZ7(unsigned int);
+
+double **archiveVar;//[archive_size][maxvar]; /* variable values of particles in the archive  */
+double **archiveFit;//[archive_size][maxfun]; /* fitness values of particles in the archive   */
+double **popVar;//[popsize][maxvar];	         /* variable values of particles in the population   */
+double **popFit;//[popsize][maxfun];		 /* fitness values of particles in the population    */
+double **pbestsVar;//[popsize][maxvar];	 /* personal bests of particles in the population    */
+double **pbestsFit;//[popsize][maxfun];	 /* personal bests of particles in the population    */
+double **velocity;//[popsize][maxvar];	 /* velocity of particles in the population          */
+double *crowdDist;//[archive_size];		 /* crowding distance values of particles in archive */
+double pMut=0.5;			 /* probability of mutation                          */
+unsigned int nondomCtr = 0;		 /* number of nondominated solutions in archive      */
+
+int function;
+int maxgen;
+int optimization;   /* tipo de optimizacion, 0 minimizacion, 1 maximizacion*/
+int maxfun;         /* numero maximo de funciones objetivo */
+int maxvar;         /* numero maximo de variables */
+
+int main(int argc, char *argv[])
+{
+    char name[20];
+    char archiveName[20] = "archive";
+    unsigned int i, j, t;
+    clock_t  startTime, endTime;
+    double duration, clocktime;
+    //FILE *outfile,*plotfile;
+    PI = 4.0*atan(1.0);
+    strcpy(name,argv[1]);
+    function = atoi(argv[2]);
+    maxgen = atoi(argv[3]);
+
+    printf("%s %d %d \n",name,function,maxgen);
+
+    initialize_data(function,maxgen);
+    initialize_memory();
+ // sprintf(archiveName,"archive.out");
+ // outfile = fopen("output.out","w");
+ // plotfile = fopen("plot.out","w");
+  /* Initialize random number generator */
+    initialize_rand();
+    startTime = clock();
+  /* Initialize generation counter */
+    t = 0;
+  /* Initialize population with random values */
+    initialize_pop();
+  /* Initialize velocity */
+    initialize_vel();
+  /* Evaluate particles in population */
+    evaluate();
+  /* Store initial personal bests (both variable and fitness values) of particles */
+    store_pbests();
+  /* Insert nondominated particles in population into the archive */
+    insert_nondom();
+    clocktime = (clock() - startTime)/(double)CLOCKS_PER_SEC;
+  /******* MAIN LOOP *********/
+    while(t <= maxgen){
+    /*if(verbose > 0 && t%printevery==0 || t == maxgen) {
+      fprintf(stdout,"Generation %d Time: %.2f sec\n",t,clocktime);
+      fflush(stdout);
+    }
+    if(t%printevery==0 || t == maxgen) {
+      fprintf(outfile,"Generation %d Time: %.2f sec\n",t,clocktime);
+    }**/
+    /* Compute crowding distance of each particle in the archive */
+    /* Only when there are at least 3 particles in the archive */
+    if(nondomCtr > 2)
+        crowding();
+    /* Compute new velocity of each particle in the population */
+    compute_velocity();
+    /* Maintain particles in the population within the search space */
+    maintain_particles();
+    /* Mutate particles in the population */
+    if(t < maxgen * pMut)
+        mutate(t);
+    /* Evaluate particles in the population */
+    evaluate();
+    /* Insert new nondominated particles in pop into archive */
+    update_archive();
+    /* Update personal bests of particles in the population */
+    update_pbests();
+    /* Print Best So Far */
+   /* if(t%printevery==0 || t == maxgen) {
+      fprintf(outfile, "Size of Pareto Set: %d\n", nondomCtr);
+      for(i = 0; i < nondomCtr; i++) {
+        fprintf(outfile, "Function Values: ");
+        for(j = 0; j < maxfun; j++)
+        fprintf(outfile, "%.6f ", archiveFit[i][j]);
+        fprintf(outfile, "\n");
+        for(j = 0; j < maxvar; j++)
+        fprintf(outfile, "%.6f ", archiveVar[i][j]);
+        fprintf(outfile, "\n");
+    }
+      fprintf(outfile, "\n\n");
+      fflush(outfile);
+    }
+    if(t == maxgen) {
+      fprintf(plotfile, "# GNU Plot\n");
+      for(i = 0; i < nondomCtr; i++) {
+	for(j = 0; j < maxfun; j++)
+	  fprintf(plotfile, "%.4f ", archiveFit[i][j]);
+
+	fprintf(plotfile, "\n");
+      }
+      fflush(plotfile);
+    }
+    */
+    /* Increment generation counter */
+    t++;
+//    printf("\n%d",t);
+}
+  /* Write results to file */
+    save_results(strcat(strcat(archiveName,name),".out"));
+  /* Compute time duration */
+    endTime = clock();
+    duration = ( endTime - startTime ) / (double)CLOCKS_PER_SEC;
+    fprintf(stdout, "%lf sec\n", duration);
+    free_memory();
+//  fclose(outfile);
+//  fclose(plotfile);
+    return EXIT_SUCCESS;
+}
+void initialize_data(unsigned int fun,unsigned int mg)
+{
+    function = fun;
+    maxgen = mg;         /* numero maximo de generaciones */
+
+    switch(fun)
+	{
+		case 100: /* Kita */
+            maxfun = 2;
+            maxvar = 2;
+            optimization = 1;
+            break;
+		case 200: /* Kursawe */
+			maxfun = 2;
+            maxvar = 3;
+            optimization = 0;
+			break;
+		case 300: /* Deb 1 */
+			maxfun = 2;
+            maxvar = 2;
+            optimization = 0;
+			break;
+        case 350: /* Deb 2 */
+			maxfun = 2;
+            maxvar = 2;
+            optimization = 0;
+			break;
+        case 400: /* Deb 3 */
+			maxfun = 2;
+            maxvar = 2;
+            optimization = 0;
+			break;
+        case 450: /* Fonseca 2 */
+			maxfun = 2;
+            maxvar = 2;
+            optimization = 0;
+			break;
+        case 500: /* DTLZ7 */
+			maxfun = 3;
+            maxvar = 22;
+            optimization = 0;
+            break;
+        case 600: /* zdt1 */
+			maxfun = 2;
+            maxvar = 30;
+            optimization = 0;
+            break;
+        case 605: /* zdt2 */
+			maxfun = 2;
+            maxvar = 30;
+            optimization = 0;
+            break;
+        case 610: /* zdt3 */
+			maxfun = 2;
+            maxvar = 30;
+            optimization = 0;
+            break;
+        case 615: /* zdt4 */
+			maxfun = 2;
+            maxvar = 10;
+            optimization = 0;
+            break;
+        case 620: /* zdt6 */
+			maxfun = 2;
+            maxvar = 10;
+            optimization = 0;
+            break;
+        case 700: /* DTLZ1*/
+			maxfun = 3;
+            maxvar = 7;
+            optimization = 0;
+            break;
+        case 705: /* DTLZ2*/
+			maxfun = 3;
+            maxvar = 12 ;
+            optimization = 0;
+            break;
+        case 710: /* DTLZ3*/
+			maxfun = 3;
+            maxvar = 12;
+            optimization = 0;
+            break;
+        case 715: /* DTLZ4*/
+			maxfun = 3;
+            maxvar = 12;
+            optimization = 0;
+            break;
+        case 720: /* DTLZ5*/
+			maxfun = 3;
+            maxvar = 12;
+            optimization = 0;
+            break;
+        case 725: /* DTLZ6*/
+			maxfun = 3;
+            maxvar = 12;
+            optimization = 0;
+            break;
+        case 730: /* DTLZ7*/
+			maxfun = 3;
+            maxvar = 22;
+            optimization = 0;
+            break;
+             /** Agregar mas aqui ***/
+	}
+}
+void initialize_memory()
+{
+	unsigned int i, j;
+	/*reservando Memoria*/
+	archiveVar = (double **) calloc(archive_size,sizeof(double *));
+	archiveFit = (double **) calloc(archive_size,sizeof(double *));
+	for(i=0;i < archive_size;i++)
+	{
+		archiveVar[i] = (double *) calloc(maxvar,sizeof(double));
+		archiveFit[i] = (double *) calloc(maxfun,sizeof(double));
+	}
+	popVar = (double **) calloc(popsize,sizeof(double *));
+	popFit = (double **) calloc(popsize,sizeof(double *));
+	pbestsVar = (double **) calloc(popsize,sizeof(double *));
+	pbestsFit = (double **) calloc(popsize,sizeof(double *));
+	velocity = (double **) calloc(popsize,sizeof(double *));
+
+	for(i=0;i < popsize;i++)
+	{
+		popVar[i] = (double *) calloc(maxvar,sizeof(double));
+		pbestsVar[i] = (double *) calloc(maxvar,sizeof(double));
+		velocity[i] = (double *) calloc(maxvar,sizeof(double));
+	}
+	for(i=0;i < popsize;i++)
+	{
+		popFit[i] = (double *) calloc(maxfun,sizeof(double));
+		pbestsFit[i] = (double *) calloc(maxfun,sizeof(double));
+	}
+	crowdDist = (double *) calloc(archive_size,sizeof(double));
+}
+
+void initialize_rand() /* Initialize random number generator from randomlib.h */
+{
+    unsigned int i, j;
+    srand((unsigned int)time((time_t *)NULL));
+    i = (unsigned int) (31329.0 * rand() / (RAND_MAX + 1.0));
+    j = (unsigned int) (30082.0 * rand() / (RAND_MAX + 1.0));
+    RandomInitialise(i,j);
+}
+void free_memory()
+{
+    int i;
+	for(i=0;i < archive_size;i++)
+	{
+		free(archiveVar[i]);
+		free(archiveFit[i]);
+	}
+    free(archiveVar);
+	free(archiveFit);
+    for(i=0;i < popsize;i++)
+	{
+		free(popVar[i]);
+		free(pbestsVar[i]);
+		free(velocity[i]);
+	}
+	for(i=0;i < popsize;i++)
+	{
+		free(popFit[i]);
+		free(pbestsFit[i]);
+	}
+	free(popVar);
+	free(popFit);
+	free(pbestsVar);
+	free(pbestsFit);
+	free(velocity);
+	free(crowdDist);
+}
+
+void initialize_pop() /* Initialize population variables */
+{
+    unsigned int i, j;
+   // printf("\nfuncion %d", function);
+    switch(function)
+    {
+
+    case 100: /* Kita test function*/
+        for(i=0; i < popsize; i++)
+          for(j =0; j < maxvar; j++)
+        popVar[i][j] = RandomDouble(0.0, 7.0);
+        break;
+    case 200: /* Kursawe test function */
+        for(i=0; i < popsize; i++)
+          for(j =0; j < maxvar; j++)
+        popVar[i][j] = RandomDouble(-5.0, 5.0);
+        break;
+    case 300: /* Deb test function */
+        for(i=0; i < popsize; i++)
+          for(j =0; j < maxvar; j++)
+        popVar[i][j] = RandomDouble(0.1, 1.0);//0.8191);
+        break;
+    case 500: /* DTLZ6 test function */
+        for(i=0; i < popsize; i++)
+          for(j =0; j < maxvar; j++)
+        popVar[i][j] = RandomDouble(0.0, 1.0);
+        break;
+    case 600: /* zdt1 */
+        for(i=0; i < popsize; i++)
+            for(j =0; j < maxvar; j++)
+			popVar[i][j] = RandomDouble(0.0, 1.0);
+        break;
+    case 605: /* zdt2 */
+        for(i=0; i < popsize; i++)
+            for(j =0; j < maxvar; j++)
+				popVar[i][j] = RandomDouble(0.0, 1.0);
+        break;
+    case 610: /* zdt3 */
+		for(i=0; i < popsize; i++)
+			for(j =0; j < maxvar; j++)
+				popVar[i][j] = RandomDouble(0.0, 1.0);
+		break;
+    case 615: /* zdt4 */
+		for(i=0; i < popsize; i++)
+		{
+		    popVar[i][0] = RandomDouble(0.0, 1.0);
+		    for(j =1; j < maxvar; j++)
+				popVar[i][j] = RandomDouble(-5.0, 5.0);
+		}
+		break;
+    case 620: /* zdt6 */
+		for(i=0; i < popsize; i++)
+			for(j =0; j < maxvar; j++)
+				popVar[i][j] = RandomDouble(0.0, 1.0);
+		break;
+    case 700: /* dtlz1 */
+		for(i=0; i < popsize; i++)
+			for(j =0; j < maxvar; j++)
+				popVar[i][j] = RandomDouble(0.0, 1.0);
+		break;
+    case 705: /* dtlz2 */
+		for(i=0; i < popsize; i++)
+			for(j =0; j < maxvar; j++)
+				popVar[i][j] = RandomDouble(0.0, 1.0);
+		break;
+    case 710: /* dtlz3 */
+		for(i=0; i < popsize; i++)
+			for(j =0; j < maxvar; j++)
+				popVar[i][j] = RandomDouble(0.0, 1.0);
+		break;
+    case 715: /* dtlz4 */
+		for(i=0; i < popsize; i++)
+			for(j =0; j < maxvar; j++)
+				popVar[i][j] = RandomDouble(0.0, 1.0);
+		break;
+    case 720: /* dtlz5 */
+		for(i=0; i < popsize; i++)
+			for(j =0; j < maxvar; j++)
+				popVar[i][j] = RandomDouble(0.0, 1.0);
+		break;
+    case 725: /* dtlz6 */
+		for(i=0; i < popsize; i++)
+			for(j =0; j < maxvar; j++)
+				popVar[i][j] = RandomDouble(0.0, 1.0);
+			break;
+    case 730: /* dtlz7 */
+		for(i=0; i < popsize; i++)
+			for(j =0; j < maxvar; j++)
+				popVar[i][j] = RandomDouble(0.0, 1.0);
+		break;
+    /** Add and initialize your test functions here  ***/
+
+    }
+}
+
+
+void initialize_vel() /* Initialize population velocity to zero */
+{
+  unsigned int i, j;
+
+  for(i = 0; i < popsize; i++)
+    for(j = 0; j < maxvar; j++)
+      velocity[i][j] = 0.0;
+}
+
+void evaluate() /* Evaluate particles in population */
+{
+    unsigned int i, j;
+//printf(" %d\n",function);
+    for(i = 0; i < popsize; i++)
+    {
+        for(j = 0; j < maxfun; j++)
+        {
+
+            switch(function + j)
+            {
+                case 100:	/* Kita's first objective function */
+                    popFit[i][j] = kita_f1(i);
+                    break;
+                case 101:	/* Kita's second objective function */
+                    popFit[i][j] = kita_f2(i);
+                    break;
+                case 200:	/* Kursawe's first objective function */
+                    popFit[i][j] = kursawe_f1(i);
+                    break;
+                case 201:	/* Kursawe's second objective function */
+                    popFit[i][j] = kursawe_f2(i);
+                    break;
+                case 300:	/* Deb's first objective function */
+                    popFit[i][j] = deb_f1(i);
+                    break;
+                case 301:	/* Deb's second objective function */
+                    popFit[i][j] = deb_f2(i);
+                    break;
+                case 500:	/* DTLZ6's first objective function */
+                    popFit[i][j] = DTLZ6_f1(i);
+                    break;
+                case 501:	/* DTLZ6's second objective function */
+                    popFit[i][j] = DTLZ6_f2(i);
+                    break;
+                case 502:	/* DTLZ1's third objective function */
+                    popFit[i][j] = DTLZ6_f3(i);
+                    break;
+                case 600:	/* zdt1 primer objetivo*/
+					ZDT1(i);
+					break;
+                case 605:	/* zdt2 primer objetivo*/
+					ZDT2(i);
+					break;
+                case 610:	/* zdt3 primer objetivo*/
+					ZDT3(i);
+					break;
+                case 615:	/* zdt4 primer objetivo*/
+                    ZDT4(i);
+					break;
+                case 620:	/* zdt6 segundo objetivo*/
+					ZDT6(i);
+					break;
+		 case 700:
+                    DTLZ1(i);
+		    break;
+		case 705:
+                    DTLZ2(i);
+                    break;
+                case 710:
+                    DTLZ3(i);
+                    break;
+                case 715:
+                    DTLZ4(i);
+                    break;
+                case 720:
+                    DTLZ5(i);
+                    break;
+                case 725:
+                    DTLZ6(i);
+                    break;
+                case 730:
+                    DTLZ7(i);
+                    break;
+	/** Add your test function here **/
+            } /* end of switch */
+        }
+    }
+}
+
+void store_pbests() /* Store personal bests (both variable and fitness values) of particles */
+{
+  unsigned int i, j;
+
+  /* Store variable values of personal bests */
+  for(i=0; i < popsize; i++)
+    for (j = 0; j < maxvar; j++)
+      pbestsVar[i][j] = popVar[i][j];
+
+  /* Store fitness values of personal bests */
+  for(i=0; i < popsize; i++)
+    for (j = 0; j < maxfun; j++)
+      pbestsFit[i][j] = popFit[i][j];
+
+}
+
+void insert_nondom() /* Insert nondominated particles in population into the archive */
+{
+  unsigned int i, j, k, total, insertFlag, bottom;
+  double archiveCons[maxvar], popCons[maxvar];
+
+  for(i=0; i< popsize; i++){
+
+
+    if(nondomCtr == 0){ /* if archive is empty */
+
+      /* Insert particle in pop into archive */
+      for(j = 0; j < maxvar; j++)
+	archiveVar[nondomCtr][j] = popVar[i][j];
+
+      for(j = 0; j < maxfun; j++)
+	archiveFit[nondomCtr][j] = popFit[i][j];
+
+      nondomCtr += 1;
+
+    } else{ /* if archive is not empty */
+
+      insertFlag = 1;
+
+      /*for each particle in archive	*/
+      for(k=0; k < nondomCtr; k++){
+
+	/* First, check for feasibility */
+
+	for(j=0; j < maxvar; j++){
+	  popCons[j] = popVar[i][j];
+	  archiveCons[j] = archiveVar[k][j];
+	}
+
+	/* If both particles are infeasible */
+	if((check_constraints(archiveCons) > 0) && (check_constraints(popCons) > 0)){
+	  delete_particle(k);           /* Delete particle in archive           */
+	  insertFlag = 0;		/* Do not insert particle in pop        */
+	  break;
+	} else if(check_constraints(popCons) > 0){ /* If particle in pop is infeasible */
+	  insertFlag = 0;			   /* Do not insert particle in pop    */
+	  break;
+	} else if(check_constraints(archiveCons) > 0){ /* If particle in archive is infeasible */
+	  delete_particle(k);                          /* Delete particle in archive           */
+
+	  if((nondomCtr != 0) || (k != nondomCtr-1))
+	    k--;
+
+	  continue;
+
+	}
+
+	/* Second, check for domination */
+	total = 0;
+
+	/* If both are feasible, check for nondomination */
+
+	//for(j=0; j < maxfun; j++){
+	 // if(( (popFit[i][j] < archiveFit[k][j]) && (optimization == 0)) || (popFit[i][j] > archiveFit[k][j]) && (optimization == 1))
+	    total += 1;
+	//}
+
+	if(total == maxfun)   /* If particle in pop dominates     */
+	  delete_particle(k); /* Delete particle in archive       */
+	else if(total == 0){  /* If particle in archive dominates */
+	  insertFlag = 0;     /* Do not insert particle in pop    */
+	  break;
+	}
+
+      } /* Finished comparing one particle in pop with particles in archive */
+    }
+
+    /* Insert particle in pop if it is feasible and nondominated */
+    if(insertFlag == 1){
+
+      /* If memory is not yet full, insert particle */
+      if (nondomCtr < archive_size) {
+	for(j = 0; j < maxvar; j++)
+	  archiveVar[nondomCtr][j] = popVar[i][j];
+	for(j = 0; j < maxfun; j++)
+	  archiveFit[nondomCtr][j] = popFit[i][j];
+	nondomCtr += 1;
+      } else{      /* If memory is full, select particle to replace */
+
+	/* Compute crowding distance values of particles in archive*/
+	crowding();
+
+	bottom = (unsigned int)((nondomCtr-1) * 0.90);
+
+	/* Randomly select which particle from the most areas to replace */
+	k = RandomInt(bottom, nondomCtr-1);
+
+	/* Insert new particle into archive */
+	for(j = 0; j < maxvar; j++)
+	  archiveVar[k][j] = popVar[i][j];
+
+	for(j = 0; j < maxfun; j++)
+	  archiveFit[k][j] = popFit[i][j];
+      }
+    }
+  } /* Finished comparing particles in pop with particles in archive */
+}
+
+void delete_particle(unsigned int k) /* Delete particle in archive */
+{
+  unsigned int j;
+
+  /* if infeasible particle is the last in archive or only one particle in archive */
+  if( (nondomCtr == 1) || (k == (nondomCtr-1)) ) {
+
+    nondomCtr -= 1;
+
+  } else {       /* move last particle in archive in place of infeasible particle	*/
+
+    for(j = 0; j < maxvar; j++)
+      archiveVar[k][j] = archiveVar[nondomCtr-1][j];
+
+    for(j = 0; j < maxfun; j++)
+      archiveFit[k][j] = archiveFit[nondomCtr-1][j];
+
+    nondomCtr -= 1;
+  }
+}
+
+unsigned int check_constraints(double *consVar) /* Check for constraint to determine feasibility */
+{
+  unsigned int violations = 0;
+
+  switch(function){
+
+  case 100: /* Kita test function */
+    if( 0 < (double)(consVar[0] / 6.0 + consVar[1] - 13.0 / 2.0 ))
+      violations++;
+    if( 0 < (double)(consVar[0] / 2.0 + consVar[1] - 15.0 / 2.0))
+      violations++;
+    if( 0 < (double)(5.0 * consVar[0] + consVar[1] - 30.0) )
+      violations++;
+
+    return violations;
+
+    /** Add test function constraints, if any, here! **/
+
+  default:
+    return 0;
+  }
+}
+
+void crowding() /* Computes crowding distance values of particles in archive */
+{
+  unsigned int i, f, begin;
+
+  /* initialize crowding distance values */
+    for(i=0; i < nondomCtr; i++)
+        crowdDist[i]  = 0;
+
+    for(f=0; f < maxfun; f++)
+    {
+        begin = 0;
+    /* Sort fitness values */
+        qsortFitness(f, begin, nondomCtr);
+
+    /* Compute crowding distance */
+        compute_distance(f);
+    }
+
+  /* Sort crowding distance values */
+    begin = 0;
+    qsortCrowd(begin, nondomCtr);
+}
+
+void qsortFitness(unsigned int f,  unsigned int begin, unsigned int lastPart) /* Sort fitness values of particles in archive */
+{
+  unsigned int l = begin + 1;
+  unsigned int r = lastPart;
+  double pivot = archiveFit[begin][f];
+
+  unsigned int k;
+  double tempF[maxfun], tempP[maxvar], temp;
+
+  while(l < r){
+    if(archiveFit[l][f] <= pivot) {
+      l++;
+    } else {
+
+      r--;
+
+      /* swap */
+      /* Exchange fitness positions of two particles in the archiveFit */
+      for(k=0; k < maxfun; k++){
+	tempF[k] = archiveFit[l][k];
+	archiveFit[l][k] = archiveFit[r][k];
+      }
+
+      for(k=0; k < maxfun; k++)
+	archiveFit[r][k] = tempF[k];
+
+      /* Also exchange particle positions in archiveVar */
+      for(k=0; k < maxvar; k++){
+	tempP[k] = archiveVar[l][k];
+	archiveVar[l][k] = archiveVar[r][k];
+      }
+
+      for(k=0; k<maxvar; k++)
+	archiveVar[r][k] = tempP[k];
+
+      /* Also exchange their crowding distance */
+      temp = crowdDist[l];
+      crowdDist[l] = crowdDist[r];
+      crowdDist[r] = temp;
+    }
+  }
+
+  l--;
+
+  /* Exchange fitness positions of two particles in the array archiveFit */
+  for(k=0; k<maxfun; k++){
+    tempF[k] = archiveFit[begin][k];
+    archiveFit[begin][k] = archiveFit[l][k];
+  }
+
+  for(k=0; k<maxfun; k++)
+    archiveFit[l][k] = tempF[k];
+
+  /* Also exchange particle positions in archiveVar */
+  for(k=0; k < maxvar; k++){
+    tempP[k] = archiveVar[begin][k];
+    archiveVar[begin][k] = archiveVar[l][k];
+  }
+
+  for(k=0; k < maxvar; k++)
+    archiveVar[l][k] = tempP[k];
+
+  /* Also exchange their crowding distance */
+  temp = crowdDist[begin];
+  crowdDist[begin] = crowdDist[l];
+  crowdDist[l] = temp;
+
+  if(l - begin > 1)
+    qsortFitness(f, begin, l);
+
+  if(lastPart - r > 1)
+    qsortFitness(f, r, lastPart);
+}
+
+void compute_distance(unsigned int f) /* Compute the crowding distance of each particle in noDomF */
+{
+  unsigned int i, max;
+
+  max = 1;
+  for(i=1; i < nondomCtr-1; i++){
+    crowdDist[i] = crowdDist[i] + (archiveFit[i+1][f]  - archiveFit[i-1][f]);
+
+    if (crowdDist[max] < crowdDist[i])
+      max = i;
+  }
+
+  /* give maximum crowding distance value to the boundary points so that they are always selected */
+  crowdDist[0] = crowdDist[0] + crowdDist[max];
+  crowdDist[nondomCtr-1] = crowdDist[nondomCtr-1] + crowdDist[max];
+
+}
+
+void qsortCrowd(unsigned int begin, unsigned int lastPart) /* Sort crowding distance values */
+{
+  unsigned int l = begin + 1;
+  unsigned int r = lastPart;
+  double pivot = crowdDist[begin];
+
+  unsigned int k;
+  double temp, tempP[maxvar], tempF[maxfun];
+
+  while(l < r){
+
+    if(crowdDist[l] >= pivot) {
+      l++;
+    } else{
+
+      r--;
+
+      /* exchange their crowding distance values */
+      temp = crowdDist[l];
+      crowdDist[l] = crowdDist[r];
+      crowdDist[r] = temp;
+
+      /* Exchange fitness positions of two particles in the array archiveFit */
+      for(k=0; k < maxfun; k++){
+	tempF[k] = archiveFit[l][k];
+	archiveFit[l][k] = archiveFit[r][k];
+      }
+
+      for(k=0; k < maxfun; k++)
+	archiveFit[r][k] = tempF[k];
+
+      /* Also exchange particle positions in archiveVar */
+      for(k=0; k < maxvar; k++){
+	tempP[k] = archiveVar[l][k];
+	archiveVar[l][k] = archiveVar[r][k];
+      }
+
+      for(k=0; k < maxvar; k++)
+	archiveVar[r][k] = tempP[k];
+    }
+  }
+
+  l--;
+
+  /* Exchange fitness positions of two particles in the array archiveVar */
+  for(k=0; k < maxfun; k++){
+    tempF[k] = archiveFit[begin][k];
+    archiveFit[begin][k] = archiveFit[l][k];
+  }
+
+  for(k=0; k < maxfun; k++)
+    archiveFit[l][k] = tempF[k];
+
+  /* Also exchange particle positions in archiveVar */
+  for(k=0; k < maxvar; k++){
+    tempP[k] = archiveVar[begin][k];
+    archiveVar[begin][k] = archiveVar[l][k];
+  }
+
+  for(k=0; k < maxvar; k++)
+    archiveVar[l][k] = tempP[k];
+
+  /* Also exchange their crowding distance */
+  temp = crowdDist[begin];
+  crowdDist[begin] = crowdDist[l];
+  crowdDist[l] = temp;
+
+  if(l - begin > 1)
+    qsortCrowd(begin, l);
+
+  if(lastPart - r > 1)
+    qsortCrowd(r, lastPart);
+}
+
+void compute_velocity() /* Compute new velocity of each particle in the population */
+{
+  unsigned int top, i, j, gBest;
+
+  top = (unsigned int)((nondomCtr-1) * 0.10);
+
+  for(i = 0; i < popsize; i++) {
+    gBest = RandomInt(0,top);
+
+    for(j = 0; j < maxvar; j++)
+      velocity[i][j] = 0.4 * velocity[i][j] + 1.0 * RandomDouble(0.0, 1.0) * (pbestsVar[i][j] - popVar[i][j]) + 1.0 * RandomDouble(0.0, 1.0) * (archiveVar[gBest][j] - popVar[i][j]);
+    /* W  * Vi             + C1  * RandomDouble(0.0, 1.0) * (pBest           -           Xi) + C2  * RandomDouble(0.0, 1.0) * (gBest                -    Xi) */
+  }
+
+  /* Calculate new positions of particles */
+  for(i = 0; i < popsize; i++)
+    for(j = 0; j < maxvar; j++)
+      popVar[i][j] = popVar[i][j] + velocity[i][j];
+}
+
+void mutate(unsigned int t) /* Mutation of particles adapted from MOPSO */
+{
+  unsigned int i;
+  int dimension = 0;
+  double minvalue[maxvar], maxvalue[maxvar], minvaluetemp, maxvaluetemp, range;
+  double valtemp = 0;
+
+  get_ranges(minvalue,maxvalue);
+
+  for(i=0; i < popsize; i++){
+    if(flip(pow(1.0-(double)t / (maxgen * pMut),1.5))){
+      dimension = RandomInt(0,maxvar-1);
+
+      range =(maxvalue[dimension] - minvalue[dimension]) * pow(1.0 - (double)t / (maxgen * pMut),1.5) / 2;
+
+      valtemp = RandomDouble(range, -range);
+
+      if(popVar[i][dimension] - range < minvalue[dimension])
+	minvaluetemp = minvalue[dimension];
+      else
+	minvaluetemp = popVar[i][dimension] - range;
+
+      if(popVar[i][dimension] + range > maxvalue[dimension])
+	maxvaluetemp = maxvalue[dimension];
+      else
+	maxvaluetemp = popVar[i][dimension] + range;
+
+      popVar[i][dimension] = RandomDouble(minvaluetemp, maxvaluetemp);
+    }
+  }
+}
+
+void update_archive()  /* Insert new nondominated particles in pop into archive */
+{
+  unsigned int i, j, k, bottom;
+
+  /* for each particle in the population */
+  for(k = 0; k < popsize; k++) {
+
+    /* if particle in pop is nondominated */
+    if (check_nondom(k) == 1) {
+
+      /* if memory is not yet full, insert particle */
+      if (nondomCtr < archive_size) {
+	i = nondomCtr;
+
+	for(j = 0; j < maxvar; j++)
+	  archiveVar[i][j] = popVar[k][j];
+
+	for(j = 0; j < maxfun; j++)
+	  archiveFit[i][j] = popFit[k][j];
+
+	nondomCtr += 1;
+
+      } else {      /* if memory is full, select particle to replace */
+	/* Crowding distance computation and sorting */
+	crowding();
+	bottom = (unsigned int)((nondomCtr-1)*.90);
+	i = RandomInt(bottom,nondomCtr-1);
+
+	/* insert new particle to noDom */
+	for(j = 0; j < maxvar; j++)
+	  archiveVar[i][j] = popVar[k][j];
+
+	for(j = 0; j < maxfun; j++)
+	  archiveFit[i][j] = popFit[k][j];
+      }
+    }
+  }
+}
+
+unsigned int check_nondom(unsigned int i) /* Check for feasibility and nondomination of particles in pop and archive */
+{
+  unsigned int sum, h = 0, j;
+  double archiveCons[maxvar], popCons[maxvar];
+
+  do {
+    sum = 0;
+    for(j=0; j < maxvar; j++){
+      archiveCons[j] = archiveVar[h][j];
+      popCons[j] = popVar[i][j];
+    }
+
+    /* if particle in archive has lesser contraint violations */
+    if(check_constraints(archiveCons) < check_constraints(popCons))
+      return 0;
+
+    /* if particle in archive has more contraint violations, delete it */
+    if(check_constraints(archiveCons) > check_constraints(popCons)){
+      for(j = 0; j < maxvar; j++)
+	archiveVar[h][j] = archiveVar[nondomCtr-1][j];
+
+      for(j = 0; j < maxfun; j++)
+	archiveFit[h][j] = archiveFit[nondomCtr-1][j];
+
+      nondomCtr -= 1;
+    } else{
+      for(j = 0; j < maxfun; j++){
+	if( ((archiveFit[h][j] < popFit[i][j]) && (optimization == 0))
+	    || ((archiveFit[h][j] > popFit[i][j]) && (optimization == 1)))
+	  sum += 1;
+      }
+
+      if(sum == maxfun)	/* If particle in archive dominates */
+	return 0;
+      else if(sum == 0){	/* If particle in archive is dominated, delete it */
+	for(j = 0; j < maxvar; j++)
+	  archiveVar[h][j] = archiveVar[nondomCtr-1][j];
+
+	for(j = 0; j < maxfun; j++)
+	  archiveFit[h][j] = archiveFit[nondomCtr-1][j];
+	nondomCtr -= 1;
+      } else {
+	h += 1;
+      }
+    }
+  } while(h < nondomCtr);
+
+  return 1;
+}
+
+void get_ranges(double *minvalue,double *maxvalue) /* Get range values of variables */
+{
+  unsigned int i;
+  switch (function)
+  {
+      case 100:	/* Kita test function */
+        for(i = 0; i < maxvar; i++)
+        {
+            minvalue[i] = 0.0;
+            maxvalue[i] = 7.0;
+        }
+        break;
+      case 200:   /* Kursawe test function */
+        for(i = 0; i < maxvar; i++){
+          minvalue[i] = -5.0;
+          maxvalue[i] = 5.0;
+        }
+        break;
+      case 300:	/* Deb test function */
+        for(i = 0; i < maxvar; i++){
+          minvalue[i] = 0.1;
+          maxvalue[i] = 1.0;//0.8191;
+        }
+        break;
+      case 500:	/* DTLZ6 test function */
+        for(i = 0; i < maxvar; i++){
+          minvalue[i] = 0.0;
+          maxvalue[i] = 1.0;
+        }
+        break;
+        case 600: case 605: case 610: /* zdt*/
+            for(i = 0; i < maxvar; i++)
+            {
+                minvalue[i] = 0.0;
+                maxvalue[i] = 1.0;
+            }
+            break;
+        case 615: /*zdt4*/
+            minvalue[0] = 0.0;
+            maxvalue[0] = 1.0;
+            for(i=1; i < maxvar; i++)
+                {
+                    minvalue[i] = -5.0;
+                    maxvalue[i] =  5.0;
+                }
+            break;
+        case 620:	/* zdt6*/
+            for(i = 0; i < maxvar; i++)
+            {
+                minvalue[i] = 0.0;
+                maxvalue[i] = 1.0;
+            }
+            break;
+        case 700: case 705: case 710: case 715: case 720:	/* dtlz*/
+        case 725: case 730:
+		for(i = 0; i < maxvar; i++)
+		{
+			minvalue[i] = 0.0;
+			maxvalue[i] = 1.0;
+		}
+		break;
+    }
+}
+
+void maintain_particles()  /* Maintain particles in the population within the search space */
+{
+  unsigned int i, j;
+  double minvalue[maxvar], maxvalue[maxvar];
+
+
+  //return /* This statement checks the stability of the swarm by allowing particles to fly past their boundaries */
+          /* Stable swarms do not explode even without boundary constraints.  */
+          /* Comment this out if you are not happy with this type of checking */
+
+  switch (function)
+  {
+        case 100: /* Kita test function */
+            for(i = 0; i < maxvar; i++){
+            minvalue[i] = 0.0;
+            maxvalue[i] = 7.0;
+            }
+        break;
+
+      case 200: /* Kursawe test function */
+        for(i = 0; i < maxvar; i++) {
+          minvalue[i] = -5.0;
+          maxvalue[i] = 5.0;
+        }
+        break;
+
+      case 300: /* Deb test function */
+        for(i = 0; i < maxvar; i++){
+          minvalue[i] = 0.1;
+          maxvalue[i] = 1.0;//0.8191;
+        }
+        break;
+      case 500: /* DTLZ6 test function */
+        for(i = 0; i < maxvar; i++){
+          minvalue[i] = 0.0;
+          maxvalue[i] = 1.0;
+        }
+        break;
+       case 600: case 605: case 610: /* zdt*/
+            for(i = 0; i < maxvar; i++)
+            {
+                minvalue[i] = 0.0;
+                maxvalue[i] = 1.0;
+            }
+            break;
+        case 615:
+            minvalue[0] = 0.0;
+            maxvalue[0] = 1.0;
+            for(i=1; i < maxvar; i++)
+                {
+                    minvalue[i] = -5.0;
+                    maxvalue[i] =  5.0;
+                }
+            break;
+        case 620:	/* zdt6*/
+            for(i = 0; i < maxvar; i++)
+            {
+                minvalue[i] = 0.0;
+                maxvalue[i] = 1.0;
+            }
+            break;
+        case 700: case 705: case 710: case 715: case 720:	/* dtlz*/
+        case 725: case 730:
+		for(i = 0; i < maxvar; i++)
+		{
+			minvalue[i] = 0.0;
+			maxvalue[i] = 1.0;
+		}
+		break;
+  /** Add boundary constraints here! **/
+  }
+
+  for(i = 0; i < popsize; i++) {
+    for(j = 0; j < maxvar; j++) {
+
+      /* If particle goes beyond minimum range value */
+      if(popVar[i][j] < minvalue[j]){
+
+	/* Set it to minimum range value */
+	popVar[i][j] = minvalue[j];
+
+	/* Change to opposite direction */
+	velocity[i][j] = -velocity[i][j];
+
+      }
+
+      /* If particle goes beyond maximum range value */
+      if(popVar[i][j] > maxvalue[j]){
+	/* Set it to maximum range value */
+	popVar[i][j] = maxvalue[j];
+
+	/* Change to opposite direction */
+	velocity[i][j] = -velocity[i][j];
+
+      }
+    }
+  }
+
+
+}
+
+void update_pbests() /* Update personal bests of particles in the population */
+{
+  unsigned int i, j, sum, better;
+
+  for(i = 0; i < popsize; i++) {
+    sum = 0;
+    for(j = 0; j < maxfun; j++){
+      if( ((popFit[i][j] < pbestsFit[i][j]) && (optimization == 0))
+	  || ((popFit[i][j] > pbestsFit[i][j]) && (optimization == 1)))
+	sum += 1;
+    }
+
+    if (sum == maxfun) {
+      better = 0;
+    } else {
+      if (sum == 0)
+	better = 1;
+      else
+	better = RandomInt(0, 1);
+    }
+
+    if (better == 0){
+      for(j = 0; j < maxfun; j++)
+	pbestsFit[i][j] = popFit[i][j];
+      for(j = 0; j < maxvar; j++)
+	pbestsVar[i][j] = popVar[i][j];
+    }
+  }
+}
+
+
+void save_results(char *archiveName)  /* Write results to file */
+{
+  unsigned int i, j;
+  FILE *fp;
+
+  /* Open file for writing */
+  fp = fopen(archiveName, "w");
+
+  for(i = 0; i < nondomCtr; i++) {
+    for(j = 0; j < maxfun; j++)
+      fprintf(fp, "%.6f ", archiveFit[i][j]);
+    fprintf(fp, "\n");
+  }
+
+  fclose(fp);
+}
+
+#include "test-fun.h"
+
+/* End of program */
