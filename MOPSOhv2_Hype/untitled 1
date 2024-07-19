@@ -1,0 +1,101 @@
+#!/bin/sh
+
+name="zdt1"
+mkdir $name
+./mopsohv _zdt1_1 600 500
+./mopsohv _zdt1_2 600 500
+./mopsohv _zdt1_3 600 500
+./mopsohv _zdt1_4 600 500
+./mopsohv _zdt1_5 600 500
+./mopsohv _zdt1_6 600 500
+./mopsohv _zdt1_7 600 500
+./mopsohv _zdt1_8 600 500
+./mopsohv _zdt1_9 600 500
+./mopsohv _zdt1_10 600 500
+./mopsohv _zdt1_11 600 500
+./mopsohv _zdt1_12 600 500
+./mopsohv _zdt1_13 600 500
+./mopsohv _zdt1_14 600 500
+./mopsohv _zdt1_15 600 500
+./mopsohv _zdt1_16 600 500
+./mopsohv _zdt1_17 600 500
+./mopsohv _zdt1_18 600 500
+./mopsohv _zdt1_19 600 500
+./mopsohv _zdt1_20 600 500
+
+mv *.out $name
+
+name="zdt2"
+mkdir $name
+./mopsohv _zdt2_1 605 500
+./mopsohv _zdt2_2 605 500
+./mopsohv _zdt2_3 605 500
+./mopsohv _zdt2_4 605 500
+./mopsohv _zdt2_5 605 500
+./mopsohv _zdt2_6 605 500
+./mopsohv _zdt2_7 605 500
+./mopsohv _zdt2_8 605 500
+./mopsohv _zdt2_9 605 500
+./mopsohv _zdt2_10 605 500
+./mopsohv _zdt2_11 605 500
+./mopsohv _zdt2_12 605 500
+./mopsohv _zdt2_13 605 500
+./mopsohv _zdt2_14 605 500
+./mopsohv _zdt2_15 605 500
+./mopsohv _zdt2_16 605 500
+./mopsohv _zdt2_17 605 500
+./mopsohv _zdt2_18 605 500
+./mopsohv _zdt2_19 605 500
+./mopsohv _zdt2_20 605 500
+
+mv *.out $name
+
+name="zdt3"
+mkdir $name
+./mopsohv _zdt3_1 610 500
+./mopsohv _zdt3_2 610 500
+./mopsohv _zdt3_3 610 500
+./mopsohv _zdt3_4 610 500
+./mopsohv _zdt3_5 610 500
+./mopsohv _zdt3_6 610 500
+./mopsohv _zdt3_7 610 500
+./mopsohv _zdt3_8 610 500
+./mopsohv _zdt3_9 610 500
+./mopsohv _zdt3_10 610 500
+./mopsohv _zdt3_11 610 500
+./mopsohv _zdt3_12 610 500
+./mopsohv _zdt3_13 610 500
+./mopsohv _zdt3_14 610 500
+./mopsohv _zdt3_15 610 500
+./mopsohv _zdt3_16 610 500
+./mopsohv _zdt3_17 610 500
+./mopsohv _zdt3_18 610 500
+./mopsohv _zdt3_19 610 500
+./mopsohv _zdt3_20 610 500
+
+mv *.out $name
+
+name="zdt4"
+mkdir $name
+./mopsohv _zdt4_1 615 5000
+./mopsohv _zdt4_2 615 5000
+./mopsohv _zdt4_3 615 5000
+./mopsohv _zdt4_4 615 5000
+./mopsohv _zdt4_5 615 5000
+./mopsohv _zdt4_6 615 5000
+./mopsohv _zdt4_7 615 5000
+./mopsohv _zdt4_8 615 5000
+./mopsohv _zdt4_9 615 5000
+./mopsohv _zdt4_10 615 5000
+./mopsohv _zdt4_11 615 5000
+./mopsohv _zdt4_12 615 5000
+./mopsohv _zdt4_13 615 5000
+./mopsohv _zdt4_14 615 5000
+./mopsohv _zdt4_15 615 5000
+./mopsohv _zdt4_16 615 5000
+./mopsohv _zdt4_17 615 5000
+./mopsohv _zdt4_18 615 5000
+./mopsohv _zdt4_19 615 5000
+./mopsohv _zdt4_20 615 5000
+
+mv *.out $name
